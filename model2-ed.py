@@ -183,12 +183,22 @@ import time
 class TeacherModel1(nn.Module):
     def __init__(self, input_dim, output_dim):
         super(TeacherModel1, self).__init__()
-        self.fc1 = nn.Linear(input_dim, 128)
-        self.fc2 = nn.Linear(128, output_dim)
+        self.fc1 = nn.Linear(input_dim, 512)
+        self.bn1 = nn.BatchNorm1d(512)
+        self.dropout1 = nn.Dropout(0.3)
+        self.fc2 = nn.Linear(512, 256)
+        self.bn2 = nn.BatchNorm1d(256)
+        self.dropout2 = nn.Dropout(0.3)
+        self.fc3 = nn.Linear(256, 128)
+        self.bn3 = nn.BatchNorm1d(128)
+        self.dropout3 = nn.Dropout(0.2)
+        self.fc4 = nn.Linear(128, output_dim)
 
     def forward(self, x):
-        x = torch.relu(self.fc1(x))
-        return self.fc2(x)
+        x = self.dropout1(F.relu(self.bn1(self.fc1(x))))
+        x = self.dropout2(F.relu(self.bn2(self.fc2(x))))
+        x = self.dropout3(F.relu(self.bn3(self.fc3(x))))
+        return self.fc4(x)
 
 class TeacherModel2(nn.Module):
     def __init__(self, input_dim, output_dim):
@@ -247,22 +257,53 @@ teacher_model4 = TeacherModel4(input_dim, output_dim)
 student_model = StudentModel(input_dim, output_dim)
 
 # Define optimizers and loss function
-optimizer_teacher1 = optim.Adam(teacher_model1.parameters(), lr=0.0001)
-optimizer_teacher2 = optim.Adam(teacher_model2.parameters(), lr=0.0001)
-optimizer_teacher3 = optim.Adam(teacher_model3.parameters(), lr=0.0001)
-optimizer_teacher4 = optim.Adam(teacher_model4.parameters(), lr=0.0001)
+optimizer_teacher1 = optim.AdamW(teacher_model1.parameters(), lr=0.001, weight_decay=0.01)
+optimizer_teacher2 = optim.AdamW(teacher_model2.parameters(), lr=0.001, weight_decay=0.01)
+optimizer_teacher3 = optim.AdamW(teacher_model3.parameters(), lr=0.001, weight_decay=0.01)
+optimizer_teacher4 = optim.AdamW(teacher_model4.parameters(), lr=0.001, weight_decay=0.01)
 optimizer_student = optim.Adam(student_model.parameters(), lr=0.0001)
 criterion = nn.CrossEntropyLoss()  # For classification, use MSELoss for regression
 
 # Step 1: Train the teacher models
-def train_model(model, optimizer, X_train_tensor, y_train_tensor, num_epochs=100):
+def train_model(model, optimizer, X_train_tensor, y_train_tensor, num_epochs=500):  # Increased epochs
     model.train()
+    scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', patience=10, factor=0.5, verbose=True)
+    best_loss = float('inf')
+    best_accuracy = 0
+    best_model_state = None
+    patience_counter = 0
+    max_patience = 20
+    
     for epoch in range(num_epochs):
         optimizer.zero_grad()
         outputs = model(X_train_tensor)
         loss = criterion(outputs, y_train_tensor)
         loss.backward()
         optimizer.step()
+        
+        # Calculate accuracy
+        _, predicted = torch.max(outputs.data, 1)
+        accuracy = (predicted == y_train_tensor).sum().item() / len(y_train_tensor) * 100
+        
+        # Learning rate scheduling
+        scheduler.step(loss)
+        
+        # Early stopping with best model saving
+        if accuracy > best_accuracy:
+            best_accuracy = accuracy
+            best_model_state = model.state_dict()
+            patience_counter = 0
+        else:
+            patience_counter += 1
+        
+        if patience_counter >= max_patience:
+            print(f"Early stopping at epoch {epoch} with best accuracy: {best_accuracy:.2f}%")
+            model.load_state_dict(best_model_state)
+            break
+            
+        if epoch % 20 == 0:
+            print(f'Epoch [{epoch}/{num_epochs}], Loss: {loss.item():.4f}, Accuracy: {accuracy:.2f}%')
+    
     return model
 
 
@@ -277,7 +318,7 @@ from torch.utils.data import DataLoader
 
 # Example: Define your train_loader if not already defined
 train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
-train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 
 def train_student(student_model, optimizer_student, train_loader, teacher_models,
                  temperature=3.0, alpha=0.5, num_epochs=10, patience=5):
@@ -447,14 +488,18 @@ y_test_tensor = y_test_tensor.long()
 optimizer = optim.Adam(student_model.parameters(), lr=0.001)
 scheduler = StepLR(optimizer, step_size=10, gamma=0.5)  # Adjust learning rate every 10 epochs
 
+# Add this function before the training loop
+def augment_data(X, y, noise_factor=0.05):
+    X_augmented = X + torch.randn_like(X) * noise_factor
+    return X_augmented, y
+
 for epoch in range(num_epochs):
-    student_model.train()
-    for inputs, labels in train_loader:  # Using DataLoader for mini-batch training
-        optimizer.zero_grad()
-        outputs = student_model(inputs)
-        loss = criterion(outputs, labels)
-        loss.backward()
-        optimizer.step()
+    X_aug, y_aug = augment_data(X_train_tensor, y_train_tensor)
+    optimizer.zero_grad()
+    outputs = student_model(X_aug)
+    loss = criterion(outputs, y_aug)
+    loss.backward()
+    optimizer.step()
 
     scheduler.step()  # Adjust learning rate after each epoch
 
@@ -614,3 +659,8 @@ try:
 
 except Exception as e:
     print(f"Error writing metrics to Google Sheets: {e}")  
+
+# Add data augmentation for training
+def augment_data(X, y, noise_factor=0.05):
+    X_augmented = X + torch.randn_like(X) * noise_factor
+    return X_augmented, y  
