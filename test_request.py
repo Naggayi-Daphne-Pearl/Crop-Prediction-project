@@ -1,44 +1,48 @@
 import requests
 import json
-import pandas as pd
-from sklearn.preprocessing import StandardScaler
 import numpy as np
 
 # Function URL from your deployment
 url = "https://us-central1-knowledge-distillation-452212.cloudfunctions.net/predict-handler-v2"
 
-# Load and prepare test data
-def prepare_test_data():
-    # Load the CSV file
-    df = pd.read_csv("GygaUganda - Station.csv")
+def create_test_data():
+    # Create a sample of preprocessed features
+    # These should be already scaled numerical values and encoded categorical values
+    features = np.zeros(21)  # Adjust this number to match your model's input dimension
     
-    # Get one sample row (excluding the CROP column)
-    sample = df.drop(columns=["CROP"]).iloc[0]
-    
-    # Convert to list and ensure all values are float
-    features = [float(x) for x in sample.values]
+    # You can adjust these values based on your actual data distribution
+    features = [
+        0.0, 0.0, 0.0, 0.0, 0.0,  # First 5 features
+        0.0, 0.0, 0.0, 0.0, 0.0,  # Next 5 features
+        0.0, 0.0, 0.0, 0.0, 0.0,  # Next 5 features
+        0.0, 0.0, 0.0, 0.0, 0.0, 0.0  # Last 6 features
+    ]
     
     return features
 
-# Prepare the test data
-features = prepare_test_data()
-
-# Create the request payload
-test_data = {
-    "features": features
-}
-
-print("Sending features:", features)
-
-# Make the request
 try:
+    # Get test features
+    features = create_test_data()
+    
+    # Create the request payload
+    test_data = {
+        "features": features
+    }
+    
+    print("\nSending features:", features)
+    print("Number of features:", len(features))
+    
+    # Make the request
     response = requests.post(url, json=test_data)
     
     # Print results
     print("\nStatus Code:", response.status_code)
     if response.status_code == 200:
-        print("Prediction:", response.json())
+        result = response.json()
+        print("Prediction:", result['prediction'])
+        print("Confidence:", result['confidence'])
     else:
         print("Error:", response.text)
+        print("Response Headers:", response.headers)
 except Exception as e:
-    print("Error making request:", e) 
+    print("Error:", str(e)) 
