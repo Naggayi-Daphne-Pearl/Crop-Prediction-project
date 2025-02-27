@@ -1,0 +1,27 @@
+{
+    "numerical_cols": [
+        "LONGITUDE",
+        "LATITUDE",
+        "ELEVATION_METER",
+        "YA",
+        "YW",
+        "YW-YA",
+        "YP",
+        "YP-YA",
+        "WPP",
+        "WPA",
+        "CROPPING_INTENSITY",
+        "YW_CV_TEMPORAL",
+        "YP_CV_TEMPORAL",
+        "YA_CV_TEMPORAL",
+        "CLIMATEZONE",
+        "AREA_IN_CLIMATEZONE_HA",
+        "MIN_N_INPUT_TARGET_30_PERC",
+        "MIN_N_INPUT_TARGET_50_PERC",
+        "MIN_N_INPUT_TARGET_80_PERC"
+    ],
+    "categorical_cols": [
+        "STATIONNAME",
+        "COUNTRY"
+    ]
+}

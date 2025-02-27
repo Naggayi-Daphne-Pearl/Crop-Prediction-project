@@ -15,7 +15,8 @@ import torch
 from torch.utils.data import TensorDataset, DataLoader
 import pickle
 import torch.nn.functional as F  # Add this import if not already present
-
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
 # Input data files are available in the read-only "../input/" directory
 # For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
 
@@ -176,6 +177,7 @@ import torch.optim as optim
 from sklearn.metrics import mean_squared_error
 import numpy as np
 from torch.utils.data import DataLoader, TensorDataset
+import time
 
 # Define Teacher Models with different architectures
 class TeacherModel1(nn.Module):
@@ -507,3 +509,108 @@ class_info = {
 with open('class_info.json', 'w') as f:
     json.dump(class_info, f, indent=4)
 
+SERVICE_ACCOUNT_FILE = 'crop-yield-prediction-452008-05e1862c508c.json' 
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SPREADSHEET_ID = '143Gaf6z2s2hSIWjMZXw6snPuUPSZ6WViYZKmagmCzho'
+
+creds = service_account.Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+service = build('sheets', 'v4', credentials=creds)
+sheet = service.spreadsheets()
+
+# Update the write_to_sheet function
+def write_to_sheet(results, sheet_name='Sheet3'):
+    # Convert all values to strings to ensure compatibility
+    if isinstance(results[0], list):
+        values = [[str(cell) for cell in row] for row in results]
+    else:
+        values = [[str(cell) for cell in results]]
+    
+    body = {'values': values}
+    try:
+        result = sheet.values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f'{sheet_name}!A1',  # This specifies where to start looking for data
+            valueInputOption='RAW',
+            insertDataOption='INSERT_ROWS',  # This makes it append
+            body=body
+        ).execute()
+        print(f"Successfully appended {result.get('updates').get('updatedRows')} rows")
+    except Exception as e:
+        print(f"Error writing to sheet: {e}")
+
+# First define the function (move this up before we use it)
+def get_training_metrics(teacher_models, student_model, train_loader):
+    metrics = {
+        'MODEL NAME': 'Knowledge Distillation Model',
+        'Teacher Training Rate': 0,
+        'Teacher Learning Rate': 0.0001,
+        'Teacher Training Accuracy': 0,
+        'Student Training Rate': 0,
+        'Student Learning Rate': 0.001,
+        'Student Training Accuracy': 0
+    }
+    
+    # Time and evaluate teacher training
+    teacher_start = time.time()
+    teacher_accuracies = []
+    
+    for teacher_model in teacher_models:
+        teacher_model.eval()
+        correct = 0
+        total = 0
+        with torch.no_grad():
+            for inputs, labels in train_loader:
+                outputs = teacher_model(inputs)
+                _, predicted = torch.max(outputs.data, 1)
+                total += labels.size(0)
+                correct += (predicted == labels).sum().item()
+        accuracy = (correct/total) * 100
+        teacher_accuracies.append(accuracy)
+        print(f"Teacher Model Accuracy: {accuracy:.2f}%")
+    
+    metrics['Teacher Training Rate'] = f"{time.time() - teacher_start:.2f}"
+    metrics['Teacher Training Accuracy'] = f"{sum(teacher_accuracies) / len(teacher_accuracies):.2f}%"
+    
+    # Time and evaluate student training
+    student_start = time.time()
+    student_model.eval()
+    correct = 0
+    total = 0
+    with torch.no_grad():
+        for inputs, labels in train_loader:
+            outputs = student_model(inputs)
+            _, predicted = torch.max(outputs.data, 1)
+            total += labels.size(0)
+            correct += (predicted == labels).sum().item()
+    
+    student_accuracy = (correct/total) * 100
+    print(f"Student Model Accuracy: {student_accuracy:.2f}%")
+    
+    metrics['Student Training Rate'] = f"{time.time() - student_start:.2f}"
+    metrics['Student Training Accuracy'] = f"{student_accuracy:.2f}%"
+    
+    return metrics
+
+# Then use it later in the code
+metrics = get_training_metrics(teacher_models, student_model, train_loader)
+write_to_sheet([list(metrics.values())])  # Just pass the values, sheet name is defaulted to 'Sheet3'
+
+# Then update how we call it
+try:
+    # Get the metrics
+    metrics = get_training_metrics(teacher_models, student_model, train_loader)
+    
+    # Print metrics for verification
+    print("\nMetrics to be sent to Google Sheets:")
+    for key, value in metrics.items():
+        print(f"{key}: {value}")
+    
+    # Write to Google Sheets
+    values = list(metrics.values())
+    
+    print("\nWriting to Google Sheets...")
+    write_to_sheet([values])  # Just pass the values, sheet name is defaulted to 'Sheet3'
+    print("Values written successfully")
+
+except Exception as e:
+    print(f"Error writing metrics to Google Sheets: {e}")  

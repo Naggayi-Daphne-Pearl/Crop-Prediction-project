@@ -2,8 +2,8 @@
 *.npy
 *.pth
 *.pkl
-*.json
-
+# *.json
+crop-yield-prediction-452008-05e1862c508c.json
 # Python
 __pycache__/
 *.py[cod]

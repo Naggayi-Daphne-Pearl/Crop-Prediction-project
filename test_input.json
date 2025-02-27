@@ -1,0 +1,50 @@
+{
+    "test_cases": [
+        {
+            "STATIONNAME": "Arua",
+            "COUNTRY": "Uganda",
+            "CLIMATEZONE": 7601,
+            "YA": 1.2,
+            "YW": 7.992575,
+            "YW-YA": 6.792575,
+            "YP": 14.04,
+            "YP-YA": 12.84,
+            "WPP": 16.24450088,
+            "WPA": 2.438938772,
+            "CROPPING_INTENSITY": 1.95,
+            "YW_CV_TEMPORAL": 0.3825273237,
+            "YP_CV_TEMPORAL": 0.04108825361,
+            "YA_CV_TEMPORAL": 0.1327936577,
+            "AREA_IN_CLIMATEZONE_HA": 5230,
+            "MIN_N_INPUT_TARGET_30_PERC": 48.43984848,
+            "MIN_N_INPUT_TARGET_50_PERC": 80.73308081,
+            "MIN_N_INPUT_TARGET_80_PERC": 135.2942115,
+            "LATITUDE": 3.05,
+            "LONGITUDE": 30.91666667,
+            "ELEVATION_METER": 1211
+        },
+        {
+            "STATIONNAME": "Gulu",
+            "COUNTRY": "Uganda",
+            "CLIMATEZONE": 7601,
+            "YA": 1.15,
+            "YW": 12.87903465,
+            "YW-YA": 11.72903465,
+            "YP": 15.67,
+            "YP-YA": 14.52,
+            "WPP": 22.2507722,
+            "WPA": 1.986825001,
+            "CROPPING_INTENSITY": 1.95,
+            "YW_CV_TEMPORAL": 0.1592526719,
+            "YP_CV_TEMPORAL": 0.03534082733,
+            "YA_CV_TEMPORAL": 0.1327936577,
+            "AREA_IN_CLIMATEZONE_HA": 3859,
+            "MIN_N_INPUT_TARGET_30_PERC": 78.05475548,
+            "MIN_N_INPUT_TARGET_50_PERC": 130.0912591,
+            "MIN_N_INPUT_TARGET_80_PERC": 218.009695,
+            "LATITUDE": 2.783333333,
+            "LONGITUDE": 32.28333333,
+            "ELEVATION_METER": 1105
+        }
+    ]
+} 

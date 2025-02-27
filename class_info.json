@@ -1,0 +1,9 @@
+{
+    "n_classes": 4,
+    "class_names": [
+        "Rainfed maize",
+        "Rainfed millet",
+        "Rainfed rice",
+        "Rainfed sorghum"
+    ]
+}

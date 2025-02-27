@@ -1,0 +1,27 @@
+{
+    "STATIONNAME": {
+        "Arua": 0,
+        "Bulindi": 1,
+        "Gulu": 2,
+        "Jinja": 3,
+        "Kabale": 4,
+        "Kitgum": 5,
+        "Lira": 6,
+        "Makerere": 7,
+        "Masindi": 8,
+        "Mbarara": 9,
+        "Namulonge": 10,
+        "Soroti": 11,
+        "Tororo": 12,
+        "uga_rfmt1": 13,
+        "uga_rfmz1": 14,
+        "uga_rfmz3": 15,
+        "uga_rfmz5": 16,
+        "uga_rfso1": 17,
+        "uga_rfso2": 18,
+        "uga_rfso3": 19
+    },
+    "COUNTRY": {
+        "Uganda": 0
+    }
+}
