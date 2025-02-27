@@ -10,6 +10,11 @@
 
 import numpy as np # linear algebra
 import pandas as pd # data processing, CSV file I/O (e.g. pd.read_csv)
+import json  # Add this import
+import torch
+from torch.utils.data import TensorDataset, DataLoader
+import pickle
+import torch.nn.functional as F  # Add this import if not already present
 
 # Input data files are available in the read-only "../input/" directory
 # For example, running this (by clicking run or pressing Shift+Enter) will list all files under the input directory
@@ -23,33 +28,30 @@ for dirname, _, filenames in os.walk('/kaggle/input'):
 # You can also write temporary files to /kaggle/temp/, but they won't be saved outside of the current session
 
 
-# In[4]:
 
+try:
+    # Try different possible file names
+    possible_files = [
+        'GygaUganda - Station.csv',
+        'Station.csv',
+        'GygaModelRunsUganda.csv'
+    ]
+    
+    df = None
+    for file_name in possible_files:
+        if os.path.exists(file_name):
+            df = pd.read_csv(file_name)
+            print(f"Successfully loaded {file_name}")
+            break
+    
+    if df is None:
+        raise FileNotFoundError("Could not find the input CSV file. Please ensure one of these files exists: " + ", ".join(possible_files))
 
-input_path = "/kaggle/input/"
-files = os.listdir(input_path)
-print("Files in /kaggle/input/:", files)
-# Define dataset directory path
-dataset_path = "/kaggle/input/gycamodel2"
-
-# List all files in the directory
-files = os.listdir(dataset_path)
-print("Files in gycamodel2:", files)
-
-# Define the correct file path
-file_path = "/kaggle/input/gycamodel2/GygaModelRunsUganda.xlsx"
-
-# Load the Excel file
-xls = pd.ExcelFile(file_path)
-for sheet_name in xls.sheet_names:
-    df = xls.parse(sheet_name)
-    df.to_csv(f"{sheet_name}.csv", index=False)
-    print(f"Saved {sheet_name}.csv")
-# List all files in the specified directory
-file_path = "Station.csv"  # Adjust the file path as necessary
-df = pd.read_csv(file_path)
-print("First few rows of the data:")
-print(df.head())
+except Exception as e:
+    print(f"Error loading data: {e}")
+    print("Current working directory:", os.getcwd())
+    print("Files in current directory:", os.listdir())
+    raise
 
 
 # In[5]:
@@ -76,29 +78,86 @@ X[categorical_cols] = X[categorical_cols].fillna(X[categorical_cols].mode().iloc
 
 # Initialize encoders
 encoder_dict = {}
-encoder = LabelEncoder()
+encoders = {}  # Dictionary to store encoder objects
 
 # Encode categorical columns properly
 for col in categorical_cols:
-    X[col] = encoder.fit_transform(X[col].astype(str))  # Ensure string conversion before encoding
+    # Create and fit a new encoder for each column
+    encoders[col] = LabelEncoder()
+    X[col] = encoders[col].fit_transform(X[col].astype(str))
     
-    # Map original category names to encoded values
-    encoder_dict[col] = {category: index for index, category in zip(encoder.classes_, encoder.transform(encoder.classes_))}
+    # Convert numpy.int64 to regular Python int when creating the dictionary
+    encoder_dict[col] = {str(category): int(index) for category, index in 
+                        zip(encoders[col].classes_, encoders[col].transform(encoders[col].classes_))}
+    
+    # Save the encoder object
+    with open(f'{col}_encoder.pkl', 'wb') as f:
+        pickle.dump(encoders[col], f)
     
     print(f"Encoding for {col}: {encoder_dict[col]}")
 
 # Encode target variable if categorical
-if y.dtype == 'object' or isinstance(y.iloc[0], str):  
-    y = encoder.fit_transform(y)
+if y.dtype == 'object' or isinstance(y.iloc[0], str):
+    crop_encoder = LabelEncoder()
+    y = crop_encoder.fit_transform(y)
+    
+    # Save the CROP encoder
+    with open('CROP_encoder.pkl', 'wb') as f:
+        pickle.dump(crop_encoder, f)
 
 # Normalize numerical columns
 scaler = StandardScaler()
 X[numerical_cols] = scaler.fit_transform(X[numerical_cols])
+
+# Save scaler parameters for deployment
+np.save('scaler_mean.npy', scaler.mean_)
+np.save('scaler_var_.npy', scaler.var_)
+
+# Print scaler parameters to verify
+print("\nScaler mean values:", scaler.mean_)
+print("\nScaler variance values:", scaler.var_)
+
+# Save encoder dictionary and column info with error handling
+try:
+    # Save encoder dictionary
+    with open('encoder_dict.json', 'w') as f:
+        json.dump(encoder_dict, f, indent=4)
+    print("Successfully saved encoder dictionary")
+
+    # Save column information
+    column_info = {
+        'numerical_cols': numerical_cols,
+        'categorical_cols': categorical_cols
+    }
+    with open('column_info.json', 'w') as f:
+        json.dump(column_info, f, indent=4)
+    print("Successfully saved column information")
+
+except Exception as e:
+    print(f"Error saving JSON files: {e}")
+    print("Encoder dictionary:", encoder_dict)
+    raise
+
 # Split the dataset into training and testing sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# Ensure the shapes of X_train, X_test, y_train, y_test
-print(X_train.shape, y_train.shape, X_test.shape, y_test.shape)
+# After the train_test_split and before printing tensor shapes
+# Convert data to PyTorch tensors
+X_train_tensor = torch.FloatTensor(X_train.values)
+X_test_tensor = torch.FloatTensor(X_test.values)
+y_train_tensor = torch.LongTensor(y_train)
+y_test_tensor = torch.LongTensor(y_test)
+
+# Now we can print the tensor shapes
+print("Tensor shapes:")
+print("X_train_tensor:", X_train_tensor.shape)  # Should output: torch.Size([32, 21])
+print("y_train_tensor:", y_train_tensor.shape)  # Should output: torch.Size([32])
+print("X_test_tensor:", X_test_tensor.shape)    # Should output: torch.Size([8, 21])
+print("y_test_tensor:", y_test_tensor.shape)    # Should output: torch.Size([8])
+
+# Create data loaders for batch processing
+train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
+train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
 
 
 # In[ ]:
@@ -219,54 +278,62 @@ train_dataset = TensorDataset(X_train_tensor, y_train_tensor)
 train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
 
 def train_student(student_model, optimizer_student, train_loader, teacher_models,
-                  temperature=3.0, alpha=0.5, num_epochs=10):
+                 temperature=3.0, alpha=0.5, num_epochs=10, patience=5):
     
-    ce_loss_fn = nn.CrossEntropyLoss()   # Standard loss for true labels
-    kd_loss_fn = nn.KLDivLoss(reduction='batchmean')  # Distillation loss
+    ce_loss_fn = nn.CrossEntropyLoss()
+    kd_loss_fn = nn.KLDivLoss(reduction='batchmean')
     
-    # Ensure teacher models are in eval mode
+    best_loss = float('inf')
+    patience_counter = 0
+    best_model_state = None
+    
     for teacher_model in teacher_models:
         teacher_model.eval()
 
     for epoch in range(num_epochs):
-        student_model.train()  # set student model to training mode
+        student_model.train()
         running_loss = 0.0
-
+        
         for batch_idx, (inputs, labels) in enumerate(train_loader):
             optimizer_student.zero_grad()
             
             # Student's forward pass
             student_logits = student_model(inputs)
-            
-            # Compute standard cross-entropy loss
             ce_loss = ce_loss_fn(student_logits, labels)
             
-            # Compute teacher predictions for this batch and average them
-            teacher_logits_list = []
+            # Get ensemble predictions from teachers
+            teacher_logits_avg = torch.zeros_like(student_logits)
             for teacher_model in teacher_models:
                 with torch.no_grad():
-                    teacher_logits = teacher_model(inputs)
-                    teacher_logits_list.append(teacher_logits)
-            # Average the logits from all teacher models
-            teacher_logits_avg = sum(teacher_logits_list) / len(teacher_models)
+                    teacher_logits_avg += teacher_model(inputs)
+            teacher_logits_avg /= len(teacher_models)
             
-            # Soften both student and teacher predictions using the temperature
+            # Knowledge distillation
             student_soft = F.log_softmax(student_logits / temperature, dim=1)
             teacher_soft = F.softmax(teacher_logits_avg / temperature, dim=1)
-            
-            # Compute the distillation (KL divergence) loss
             kd_loss = kd_loss_fn(student_soft, teacher_soft) * (temperature ** 2)
             
-            # Combine the losses
+            # Combined loss
             loss = alpha * ce_loss + (1 - alpha) * kd_loss
-            
             loss.backward()
             optimizer_student.step()
             
             running_loss += loss.item()
-
+        
         avg_loss = running_loss / len(train_loader)
         print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}")
+        
+        # Early stopping check
+        if avg_loss < best_loss:
+            best_loss = avg_loss
+            best_model_state = student_model.state_dict()
+            patience_counter = 0
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f"Early stopping triggered after {epoch+1} epochs")
+                student_model.load_state_dict(best_model_state)
+                break
     
     return student_model
 
@@ -279,6 +346,53 @@ optimizer_student = optim.Adam(student_model.parameters(), lr=0.001)
 # Train the student model using the adjusted training loop
 student_model = train_student(student_model, optimizer_student, train_loader,
                               teacher_models, temperature=3.0, alpha=0.5, num_epochs=10)
+
+# After training the student model, add this code to save it
+# This should be added after the training loop
+
+def save_model(model, path='student_model.pth'):
+    try:
+        torch.save(model.state_dict(), path)
+        print(f"Model successfully saved to {path}")
+    except Exception as e:
+        print(f"Error saving model: {e}")
+        raise
+
+# Initialize models and training parameters
+input_dim = X_train_tensor.shape[1]
+output_dim = len(np.unique(y_train))
+
+# Initialize the models
+teacher_models = [
+    TeacherModel1(input_dim, output_dim),
+    TeacherModel2(input_dim, output_dim),
+    TeacherModel3(input_dim, output_dim),
+    TeacherModel4(input_dim, output_dim)
+]
+student_model = StudentModel(input_dim, output_dim)
+
+# Train the student model
+student_model = train_student(
+    student_model=student_model,
+    optimizer_student=optimizer_student,
+    train_loader=train_loader,
+    teacher_models=teacher_models,
+    temperature=3.0,
+    alpha=0.3,
+    num_epochs=100,
+    patience=7
+)
+
+# Save the trained student model
+save_model(student_model)
+
+# Optional: Save model architecture information
+model_info = {
+    'input_dim': input_dim,
+    'output_dim': output_dim
+}
+with open('model_info.json', 'w') as f:
+    json.dump(model_info, f)
 
 
 # In[ ]:
@@ -380,4 +494,16 @@ if output_dim == 1:  # Regression task
 else:  # Classification task
     accuracy = np.mean(np.argmax(student_preds, axis=1) == y_test)
     print(f'Accuracy: {accuracy*100:.2f}%')
+
+# After encoding the target variable (y), add this:
+n_classes = len(np.unique(y))
+print(f"Number of unique classes (output_dim): {n_classes}")
+
+# Save the number of classes for deployment
+class_info = {
+    'n_classes': int(n_classes),  # Convert to int for JSON serialization
+    'class_names': [str(c) for c in crop_encoder.classes_]  # Save class names
+}
+with open('class_info.json', 'w') as f:
+    json.dump(class_info, f, indent=4)
 
