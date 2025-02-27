@@ -70,7 +70,7 @@ The API accepts a JSON payload with a `features` array. The array should contain
 1.  **Clone the Repository:**
 
     ```bash
-    git clone [https://github.com/yourusername/crop-prediction.git](https://github.com/yourusername/crop-prediction.git)
+    git clone [https://github.com/yourusername/crop-prediction.git]([https://github.com/yourusername/crop-prediction.git](https://github.com/Naggayi-Daphne-Pearl/Crop-Prediction-project))
     cd crop-prediction
     ```
 
